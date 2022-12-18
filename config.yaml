@@ -1,0 +1,5 @@
+database:
+  type: neo4j
+  connectionString: neo4j://localhost:7687
+scraper:
+  depth: 3

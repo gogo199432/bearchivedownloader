@@ -5,17 +5,31 @@ import (
 	"github.com/gocolly/colly"
 	. "github.com/gogo199432/bearchivedownloader/src/stores"
 	. "github.com/gogo199432/bearchivedownloader/src/types"
+	"github.com/spf13/viper"
+	"log"
 	"strings"
 	"time"
 )
 
 func main() {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Panicf("Fatal error config file: %s\n", err)
+	}
 	// Initiate DB connection and crawler
-	var store Storage = new(Neo4JStore)
-	store.Init("neo4j://localhost:7687")
+	var store Storage
+	switch viper.GetString("database.type") {
+	case "neo4j":
+		store = new(Neo4JStore)
+	default:
+		store = new(Neo4JStore)
+	}
+	store.Init(viper.GetString("database.connectionString"))
 	defer store.Shutdown()
 	c := colly.NewCollector(func(c *colly.Collector) {
-		c.MaxDepth = 1
+		c.MaxDepth = viper.GetInt("scraper.depth")
 		c.Async = true
 	})
 

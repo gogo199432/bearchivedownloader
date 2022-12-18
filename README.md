@@ -2,9 +2,7 @@
 
 Goal of this repo is to crawl the branching story stored at https://addventure.bearchive.com/~addventure/
 
-At the moment you can define the depth by setting the "MaxDepth" variable in the main.go file.
-
-Steps to run:
+## Steps to run:
 
 - Have Neo4J running somewhere. I used docker, and deployed it with the following command:
   - `docker volume create neo4j`
@@ -13,9 +11,14 @@ Steps to run:
 - Go to neo4j's browser to explore the DB. If deployed with Docker, go to http://localhost:7474/browser and log in without authentication
 - Enter the following query into the input field `MATCH (n) RETURN n`
 
-Things missing:
-- App should be able to be stopped and pick up later. For this it should grab nodes that don't have outgoing connections yet and visit those instead of the starting link currently defined
-- There is probably some way to multi-thread it, atm it is not async.
+## Configure:
+You can configure the scraper in the main folder using the `config.yaml` file. At the moment you can defined the DB connection 
+and how many children down the scraper should go in one go.
+
+## Things missing:
+-  ~~App should be able to be stopped and pick up later. For this it should grab nodes that don't have outgoing 
+connections yet and visit those instead of the starting link currently defined~~
+-  ~~There is probably some way to multi-thread it, at the moment it is not async.~~
 - Actual frontend to use the DB. While you can browse it by going to neo4j's browser window, it is not very good for exploring the story.
 
 Pull Requests are welcome
