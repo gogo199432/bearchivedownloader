@@ -15,5 +15,6 @@ type Storage interface {
 	Init(url string)
 	Write(entry *Entry) error
 	ResolveConnections() error
+	GetLeafs() (es []string, e error)
 	Shutdown()
 }

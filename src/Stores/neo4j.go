@@ -7,6 +7,7 @@ import (
 	"fmt"
 	. "github.com/gogo199432/bearchivedownloader/src/types"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	"golang.org/x/exp/maps"
 )
 
 type Neo4JStore struct {
@@ -22,6 +23,31 @@ func (n4j *Neo4JStore) Init(url string) {
 	}
 	n4j.driver = driver
 	n4j.ctx = context.Background()
+}
+
+func (n4j *Neo4JStore) GetLeafs() (es []string, e error) {
+	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
+	defer session.Close(n4j.ctx)
+	entriesUnparsed, err := session.Run(n4j.ctx, "MATCH (n) WHERE NOT (n)-->() RETURN n.ChildrenURLs as children", nil)
+	if err != nil {
+		return nil, err
+	}
+	var children []string
+	for entriesUnparsed.Next(n4j.ctx) {
+		n := entriesUnparsed.Record()
+		childrenData, ok := n.Get("children")
+		if !ok {
+			return nil, errors.New("Cannot get ChildrenURLs")
+		}
+		var localChildrenURLs map[string]string
+		err = json.Unmarshal(childrenData.([]byte), &localChildrenURLs)
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+		children = append(children, maps.Values(localChildrenURLs)...)
+	}
+	return children, nil
 }
 
 func (n4j *Neo4JStore) Write(entry *Entry) error {
