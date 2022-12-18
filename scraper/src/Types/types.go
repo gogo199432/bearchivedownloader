@@ -7,8 +7,10 @@ type Entry struct {
 	Title        string
 	Text         string
 	Date         time.Time
+	Author       string
 	ChildrenURLs map[string]string
 	Children     map[string]*Entry
+	Tags         []string
 }
 
 type Storage interface {

@@ -62,12 +62,22 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Run(n4j.ctx, "CREATE (n:Entry { Url: $url, Title: $title, Text: $text, Date: $date}) SET n.ChildrenURLs = $childrenURLs  RETURN n", map[string]interface{}{
+
+	var tags string
+	if len(entry.Tags) > 0 {
+		tags = "SET n "
+		for _, tag := range entry.Tags {
+			tags += ":" + tag
+		}
+	}
+
+	_, err = tx.Run(n4j.ctx, "CREATE (n:Entry { Url: $url, Title: $title, Text: $text, Date: $date, Author: $author}) "+tags+" SET n.ChildrenURLs = $childrenURLs  RETURN n", map[string]interface{}{
 		"url":          entry.Url,
 		"title":        entry.Title,
 		"text":         entry.Text,
 		"date":         entry.Date,
 		"childrenURLs": childrenData,
+		"author":       entry.Author,
 	})
 	if err != nil {
 		return err

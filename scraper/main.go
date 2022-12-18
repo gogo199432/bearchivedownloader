@@ -52,7 +52,11 @@ func main() {
 			}
 		})
 
-		store.Write(&entry)
+		err := store.Write(&entry)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	})
 
 	// Actual start of the crawling. If there were leafs, we want to continue there, otherwise start at the beginning
@@ -100,5 +104,14 @@ func createEntry(h *colly.HTMLElement) Entry {
 	}
 	entry.ChildrenURLs = make(map[string]string)
 	entry.Children = make(map[string]*Entry)
+	entry.Author = h.DOM.ChildrenFiltered("address").Text()
+
+	tagHolder := h.DOM.Find("font")
+	red, exists := tagHolder.Attr("color")
+	if exists && red == "red" {
+		tags := strings.Fields(tagHolder.Text())
+		entry.Tags = append(entry.Tags, tags...)
+	}
+
 	return entry
 }
