@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/gogo199432/bearchivedownloader/src/types"
+	"github.com/lithammer/shortuuid"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"golang.org/x/exp/maps"
 )
@@ -71,13 +72,14 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 		}
 	}
 
-	_, err = tx.Run(n4j.ctx, "CREATE (n:Entry { Url: $url, Title: $title, Text: $text, Date: $date, Author: $author}) "+tags+" SET n.ChildrenURLs = $childrenURLs  RETURN n", map[string]interface{}{
+	_, err = tx.Run(n4j.ctx, "CREATE (n:Entry { Id: $id,Url: $url, Title: $title, Text: $text, Date: $date, Author: $author}) "+tags+" SET n.ChildrenURLs = $childrenURLs  RETURN n", map[string]interface{}{
 		"url":          entry.Url,
 		"title":        entry.Title,
 		"text":         entry.Text,
 		"date":         entry.Date,
 		"childrenURLs": childrenData,
 		"author":       entry.Author,
+		"id":           shortuuid.New(),
 	})
 	if err != nil {
 		return err
