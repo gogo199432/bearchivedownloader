@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/gocolly/colly"
-	. "github.com/gogo199432/bearchivedownloader/src/stores"
-	. "github.com/gogo199432/bearchivedownloader/src/types"
+	. "github.com/gogo199432/bearchivedownloader/stores"
+	. "github.com/gogo199432/bearchivedownloader/types"
 	"github.com/spf13/viper"
 	"log"
 	"strings"
@@ -14,6 +14,7 @@ import (
 func main() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
+	viper.AddConfigPath("./scraper")
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Panicf("Fatal error config file: %s\n", err)
@@ -29,9 +30,11 @@ func main() {
 	store.Init(viper.GetString("database.connectionString"))
 	defer store.Shutdown()
 	c := colly.NewCollector(func(c *colly.Collector) {
-		c.MaxDepth = viper.GetInt("scraper.depth")
 		c.Async = true
 	})
+	if viper.InConfig("scraper.depth") {
+		c.MaxDepth = viper.GetInt("scraper.depth")
+	}
 
 	// Try to grab any leaf nodes already in the DB
 	leafs, err := store.GetLeafs()
@@ -46,7 +49,6 @@ func main() {
 		h.ForEach("li", func(i int, h2 *colly.HTMLElement) {
 			if strings.Contains(h2.Text, "*") {
 				attr := h2.ChildAttr("a[href]", "href")
-				fmt.Println("Visiting ", attr)
 				entry.ChildrenURLs[h2.Text] = h.Request.AbsoluteURL(attr)
 				h.Request.Visit(attr)
 			}
@@ -58,7 +60,7 @@ func main() {
 			return
 		}
 	})
-
+	fmt.Println(time.Now(), ": Starting crawl...")
 	// Actual start of the crawling. If there were leafs, we want to continue there, otherwise start at the beginning
 	if len(leafs) == 0 {
 		c.Visit("https://addventure.bearchive.com/~addventure/game1/docs/000/2.html")
@@ -106,11 +108,15 @@ func createEntry(h *colly.HTMLElement) Entry {
 	entry.Children = make(map[string]*Entry)
 	entry.Author = h.DOM.ChildrenFiltered("address").Text()
 
-	tagHolder := h.DOM.Find("font")
+	tagHolder := h.DOM.Find("font").First()
 	red, exists := tagHolder.Attr("color")
-	if exists && red == "red" {
+	if exists && red == "red" && len(entry.Tags) == 0 {
 		tags := strings.Fields(tagHolder.Text())
-		entry.Tags = append(entry.Tags, tags...)
+		for _, tag := range tags {
+			// Neo4J can't have dash (amongst others) in the label name
+			tag = strings.ReplaceAll(tag, "-", "_")
+			entry.Tags = append(entry.Tags, tag)
+		}
 	}
 
 	return entry

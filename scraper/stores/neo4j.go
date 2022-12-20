@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	. "github.com/gogo199432/bearchivedownloader/src/types"
+	. "github.com/gogo199432/bearchivedownloader/types"
 	"github.com/lithammer/shortuuid"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"golang.org/x/exp/maps"
@@ -82,6 +82,7 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 		"id":           shortuuid.New(),
 	})
 	if err != nil {
+		fmt.Println("Error when parsing this page: " + entry.Url)
 		return err
 	}
 	err = tx.Commit(n4j.ctx)
