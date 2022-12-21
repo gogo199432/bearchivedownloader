@@ -7,7 +7,7 @@ process.on('SIGTERM',CloseDB)
 
 function GetSession() : neo4j.Session{
     if(db == null){
-        db = neo4j.driver("neo4j://localhost:7687")
+        db = neo4j.driver(process.env.NEO4J || "neo4j://localhost:7687")
     }
     return db.session()
 }
@@ -16,12 +16,34 @@ export function CloseDB(){
     db.close()
 }
 
+export async function GetRootId() : Promise<string>{
+    const session = GetSession();
+    const result = await session.run('MATCH (entry:Entry) WHERE NOT (entry)<-[]-(:Entry) RETURN entry.Id as Id')
+
+    await session.close()
+    let id = "some value" // To make es-lint happy
+    result.records.forEach(x=>{
+        id = x.get("Id")
+    })
+    return id
+}
+
 export async function GetEntry(id: string) : Promise<Entry | null> {
     const session = GetSession();
-    let entry: Entry | null = null
-    let result = await session.run('MATCH (entry:Entry {Id: $idParam}) RETURN properties(entry) as props, labels(entry) as labels', {
+    const result = await session.run('MATCH (entry:Entry {Id: $idParam}) RETURN properties(entry) as props, labels(entry) as labels , entry.Id as Id', {
         idParam: id
     })
+
+    const entry = await ParseToEntry(session,result)
+
+    await session.close()
+    return entry
+}
+
+async function ParseToEntry(session: neo4j.Session, result: neo4j.QueryResult) : Promise<Entry | null>{
+    let entry: Entry | null = null
+
+    let id = "some value" // To make es-lint happy
 
     result.records.forEach(record => {
         const e = record.get('props');
@@ -29,6 +51,7 @@ export async function GetEntry(id: string) : Promise<Entry | null> {
         delete e.Children
         e.Date = e.Date.toStandardDate()
         e.Tags = record.get('labels').filter((x: string) => x !== 'Entry')
+        id = record.get("Id")
         entry = e
     })
 
@@ -43,7 +66,5 @@ export async function GetEntry(id: string) : Promise<Entry | null> {
             entry.Choices[record.get("ch")] = record.get("chId")
         }
     })
-
-    await session.close()
     return entry
 }
