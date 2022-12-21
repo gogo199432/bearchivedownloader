@@ -109,15 +109,17 @@ func createEntry(h *colly.HTMLElement) Entry {
 	entry.Author = h.DOM.ChildrenFiltered("address").Text()
 
 	tagHolder := h.DOM.Find("font").First()
-	red, exists := tagHolder.Attr("color")
-	if exists && red == "red" && len(entry.Tags) == 0 {
-		tags := strings.Fields(tagHolder.Text())
-		for _, tag := range tags {
-			// Neo4J can't have dash (amongst others) in the label name
-			tag = strings.ReplaceAll(tag, "-", "_")
-			entry.Tags = append(entry.Tags, tag)
+	tagText := tagHolder.SiblingsFiltered("b")
+	if tagHolder.Index() != -1 && tagText.Text() == "Tags:" && tagHolder.Index() == tagText.Index()+1 {
+		red, exists := tagHolder.Attr("color")
+		if exists && red == "red" && len(entry.Tags) == 0 {
+			tags := strings.Fields(tagHolder.Text())
+			for _, tag := range tags {
+				// Neo4J can't have dash (amongst others) in the label name
+				tag = strings.ReplaceAll(tag, "-", "_")
+				entry.Tags = append(entry.Tags, tag)
+			}
 		}
 	}
-
 	return entry
 }
