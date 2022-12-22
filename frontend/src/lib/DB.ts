@@ -17,11 +17,16 @@ export function CloseDB(){
 }
 
 export async function GetRootId() : Promise<string>{
-    const session = GetSession();
-    const result = await session.run('MATCH (entry:Entry) WHERE NOT (entry)<-[]-(:Entry) RETURN entry.Id as Id')
+    let id = 'some value'; // To make es-lint happy
+		if (process.env.ROOT) {
+			return process.env.ROOT;
+		}
+		const session = GetSession();
+		const result = await session.run(
+			'MATCH (entry:Entry) WHERE NOT (entry)<-[]-(:Entry) RETURN entry.Id as Id'
+		);
 
-    await session.close()
-    let id = "some value" // To make es-lint happy
+		await session.close();
     result.records.forEach(x=>{
         id = x.get("Id")
     })

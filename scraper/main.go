@@ -95,7 +95,7 @@ func createEntry(h *colly.HTMLElement) Entry {
 				txt == "" {
 				return
 			}
-			entry.Text += txt
+			entry.Text += txt + "<br>"
 		} else {
 			entry.Date = published
 		}
