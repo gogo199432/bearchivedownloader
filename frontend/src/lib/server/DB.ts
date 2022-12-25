@@ -1,5 +1,6 @@
 import * as neo4j from 'neo4j-driver'
 import type {Entry} from "$lib/EntryType";
+import {error} from "@sveltejs/kit";
 
 let db: neo4j.Driver;
 process.on('SIGINT',CloseDB)
@@ -18,19 +19,26 @@ export function CloseDB(){
 
 export async function GetRootId() : Promise<string>{
     let id = 'some value'; // To make es-lint happy
-		if (process.env.ROOT) {
-			return process.env.ROOT;
-		}
-		const session = GetSession();
-		const result = await session.run(
-			'MATCH (entry:Entry) WHERE NOT (entry)<-[]-(:Entry) RETURN entry.Id as Id'
-		);
+    if (process.env.ROOT) {
+        return process.env.ROOT;
+    }else{
+        throw error(500,"No root defined")
+    }
+    // Doesn't actually work properly, dunno why. Probably some issue with the scraper
+    // the DB seems to have multiple nodes without incoming edges
+    /*const session = GetSession();
+    const result = await session.run(
+        'MATCH (entry:Entry) WHERE NOT (entry)<-[]-(:Entry) RETURN entry.Id as Id'
+    );
 
-		await session.close();
+    await session.close();
+    if(result.records.length == 0){
+        throw error(404,"No root found")
+    }
     result.records.forEach(x=>{
         id = x.get("Id")
     })
-    return id
+    return id*/
 }
 
 export async function GetEntry(id: string) : Promise<Entry | null> {

@@ -7,4 +7,4 @@
 <p>This project is still very early, the UI is in a "just enough to be working" state.</p>
 
 <h2>To go to the beginning of the adventure click here: </h2>
-<a href="/entry/{data.root}"><b>Adventure starts here</b></a>
+<a href="/entrylist/{data.root}"><b>Adventure starts here</b></a>
