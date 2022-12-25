@@ -8,8 +8,19 @@
         console.log($page.params["rootEntry"])
         entries = [$page.params["rootEntry"],...entries]
     })
+
+    function choiceHandler(event){
+        entries = [...entries,event.detail.choice]
+    }
+
+    function backHandler(event){
+        const border = entries.indexOf(event.detail.choice)
+        entries.length = border
+    }
 </script>
 
 {#each entries as entry}
-    <Entry entryId={entry}></Entry>
+    <Entry entryId={entry} on:chosen={choiceHandler} on:back={backHandler}></Entry>
+    <hr>
+    <hr>
 {/each}
