@@ -1,4 +1,4 @@
-import {GetRootId} from "$lib/DB";
+import {GetRootId} from "$lib/server/DB";
 import {error} from "@sveltejs/kit";
 
 export async function load() {
@@ -6,6 +6,7 @@ export async function load() {
     if(root == null){
         throw error(404, "There is no root in our database???")
     }
+    console.log("Root: "+root)
     return {
         root
     };
