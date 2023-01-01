@@ -20,4 +20,6 @@ and how many children down the scraper should go in one go.
 - Proper css framework to make it pretty
 - Search based on time, author etc
 - Caching for query results
-Pull Requests are welcome
+
+## Contributing:
+Just open a Pull Request and describe exactly what your changes do.
