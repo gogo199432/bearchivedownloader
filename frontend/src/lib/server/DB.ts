@@ -18,7 +18,7 @@ export function CloseDB(){
 }
 
 export async function GetRootId() : Promise<string>{
-    let id = 'some value'; // To make es-lint happy
+    // const id = 'some value'; // To make es-lint happy
     if (process.env.ROOT) {
         return process.env.ROOT;
     }else{
@@ -51,6 +51,18 @@ export async function GetEntry(id: string) : Promise<Entry | null> {
 
     await session.close()
     return entry
+}
+
+export async function FindEntriesWithFilter(filter:string) : Promise<{id: string,title: string, labels: string}[]>{
+    const session = GetSession();
+    const result = await session.run('MATCH (entry:Entry) WHERE '+filter+' RETURN entry.Id as Id, entry.Title as Title, labels(entry) as Labels')
+    await session.close()
+    const entries :{id: string,title: string, labels:string}[] = []
+    result.records.forEach(record =>{
+        const labels = record.get("Labels").filter((x:string) => x !== "Entry").join(" ")
+        entries.push({id: record.get("Id"), title: record.get("Title"), labels})
+    })
+    return entries
 }
 
 async function ParseToEntry(session: neo4j.Session, result: neo4j.QueryResult) : Promise<Entry | null>{

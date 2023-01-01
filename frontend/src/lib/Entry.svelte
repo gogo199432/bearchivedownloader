@@ -31,6 +31,7 @@
     <address style="display: inline">{entry.Author}</address>
     <b>-</b>
     <div style="display: inline">{entry.Date}</div>
+    <small style="display: block">Id: {entry.Id}</small>
     <h4>Tags:</h4>
     <ul>
         {#each entry.Tags as tag}
