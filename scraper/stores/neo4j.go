@@ -8,6 +8,7 @@ import (
 	. "github.com/gogo199432/bearchivedownloader/types"
 	"github.com/lithammer/shortuuid"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	"github.com/spf13/viper"
 	"golang.org/x/exp/maps"
 )
 
@@ -18,7 +19,12 @@ type Neo4JStore struct {
 
 func (n4j *Neo4JStore) Init(url string) {
 	dbUri := url
-	driver, err := neo4j.NewDriverWithContext(dbUri, neo4j.NoAuth())
+	neo4jauth := neo4j.NoAuth()
+	if viper.InConfig("database.password") {
+		viper.SetDefault("database.username", "neo4j")
+		neo4jauth = neo4j.BasicAuth(viper.GetString("database.username"), viper.GetString("database.password"), "")
+	}
+	driver, err := neo4j.NewDriverWithContext(dbUri, neo4jauth)
 	if err != nil {
 		panic(err)
 	}

@@ -1,5 +1,6 @@
 database:
   type: neo4j
   connectionString: neo4j://localhost:7687
+  password: password123
 scraper:
   depth: 10

@@ -1,6 +1,5 @@
 import * as neo4j from 'neo4j-driver'
 import type {Entry} from "$lib/EntryType";
-import {error} from "@sveltejs/kit";
 
 let db: neo4j.Driver;
 process.on('SIGINT',CloseDB)
@@ -8,13 +7,17 @@ process.on('SIGTERM',CloseDB)
 
 function GetSession() : neo4j.Session{
     if(db == null){
-        db = neo4j.driver(process.env.NEO4J || "neo4j://localhost:7687")
+        if(process.env.DBPASSWORD){
+            db = neo4j.driver(process.env.NEO4J || "neo4j://localhost:7687", neo4j.auth.basic(process.env.DBUSERNAME ?? "neo4j",process.env.DBPASSWORD))
+        }else{
+            db = neo4j.driver(process.env.NEO4J || "neo4j://localhost:7687")
+        }
     }
     return db.session()
 }
 
 export function CloseDB(){
-    db.close()
+    db?.close()
 }
 
 export async function GetRootId() : Promise<string>{
@@ -22,7 +25,7 @@ export async function GetRootId() : Promise<string>{
     if (process.env.ROOT) {
         return process.env.ROOT;
     }else{
-        throw error(500,"No root defined")
+        return ""
     }
     // Doesn't actually work properly, dunno why. Probably some issue with the scraper
     // the DB seems to have multiple nodes without incoming edges

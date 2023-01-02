@@ -35,12 +35,56 @@
     {/if}
 {/if}
 <h3>Example queries (a,b,c etc are any tags below): </h3>
-<ul>
-    <li>a</li>
-    <li>(a)</li>
-    <li>a AND b</li>
-    <li>a AND (b OR c)</li>
-</ul>
+<table>
+    <thead>
+        <tr>
+            <td style="background-color: lightgreen; font-weight: bold">Correct</td>
+            <td style="background-color: lightcoral; font-weight: bold">Wrong</td>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+                a
+            </td>
+            <td>
+                (empty)
+            </td>
+        </tr>
+        <tr>
+            <td>
+                (a)
+            </td>
+            <td>
+                (a(
+            </td>
+        </tr>
+        <tr>
+            <td>
+                a AND b
+            </td>
+            <td>
+                a b
+            </td>
+        </tr>
+        <tr>
+            <td>
+                a AND (b OR c)
+            </td>
+            <td>
+                a AND AND b
+            </td>
+        </tr>
+        <tr>
+            <td>
+                a AND NOT b
+            </td>
+            <td>
+                a NOT b
+            </td>
+        </tr>
+    </tbody>
+</table>
 <h3>Possible operators</h3>
 <ul>
     <li>AND</li>
