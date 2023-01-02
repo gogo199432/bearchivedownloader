@@ -74,7 +74,7 @@ func main() {
 	// Actual start of the crawling. If there were leafs, we want to continue there, otherwise start at the beginning
 	if store.GetNodeCount() == 0 {
 		fmt.Println("No nodes present. Using root")
-		c.Visit("https://addventure.bearchive.com/~addventure/game1/docs/000/48.html")
+		c.Visit("https://addventure.bearchive.com/~addventure/game1/docs/000/2.html")
 	} else {
 		fmt.Println("Found leafs:", len(leafs))
 		for _, leaf := range leafs {
