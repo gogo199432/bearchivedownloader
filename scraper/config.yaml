@@ -3,4 +3,5 @@ database:
   connectionString: neo4j://localhost:7687
   password: password123
 scraper:
-  depth: 10
+  depth: 100
+  parallelism: 20

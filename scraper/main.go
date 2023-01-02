@@ -43,7 +43,8 @@ func main() {
 	// Limit the maximum parallelism
 	// This is necessary if the goroutines are dynamically
 	// created to control the limit of simultaneous requests.
-	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 4})
+	viper.SetDefault("scraper.parallelism", 2)
+	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: viper.GetInt("scraper.parallelism")})
 
 	// Try to grab any leaf nodes already in the DB
 	leafs, err := store.GetLeafs()
