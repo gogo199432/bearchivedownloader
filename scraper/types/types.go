@@ -19,4 +19,5 @@ type Storage interface {
 	ResolveConnections() error
 	GetLeafs() (es []string, e error)
 	Shutdown()
+	GetNodeCount() (count int64)
 }

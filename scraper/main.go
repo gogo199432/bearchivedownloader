@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/gocolly/colly"
+	colly "github.com/gocolly/colly"
 	. "github.com/gogo199432/bearchivedownloader/stores"
 	. "github.com/gogo199432/bearchivedownloader/types"
 	"github.com/spf13/viper"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,17 +32,25 @@ func main() {
 	defer store.Shutdown()
 	c := colly.NewCollector(func(c *colly.Collector) {
 		c.Async = true
+		c.DetectCharset = true
 	})
 	if viper.InConfig("scraper.depth") {
-		c.MaxDepth = viper.GetInt("scraper.depth")
+		depth := viper.GetInt("scraper.depth")
+		fmt.Println("Depth is", strconv.Itoa(depth))
+		c.MaxDepth = depth
 	}
+
+	// Limit the maximum parallelism
+	// This is necessary if the goroutines are dynamically
+	// created to control the limit of simultaneous requests.
+	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 4})
 
 	// Try to grab any leaf nodes already in the DB
 	leafs, err := store.GetLeafs()
 	if err != nil {
 		panic(err)
 	}
-
+	var addedEntries = 0
 	// Define what to do when processing an entry
 	// (Creates an Entry object, fills it up and passes it to the DB to store)
 	c.OnHTML("body", func(h *colly.HTMLElement) {
@@ -59,12 +68,15 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+		addedEntries++
 	})
 	fmt.Println(time.Now(), ": Starting crawl...")
 	// Actual start of the crawling. If there were leafs, we want to continue there, otherwise start at the beginning
-	if len(leafs) == 0 {
-		c.Visit("https://addventure.bearchive.com/~addventure/game1/docs/000/2.html")
+	if store.GetNodeCount() == 0 {
+		fmt.Println("No nodes present. Using root")
+		c.Visit("https://addventure.bearchive.com/~addventure/game1/docs/000/48.html")
 	} else {
+		fmt.Println("Found leafs:", len(leafs))
 		for _, leaf := range leafs {
 			c.Visit(leaf)
 		}
@@ -73,6 +85,7 @@ func main() {
 	// Make sure we have finished crawling on all threads, and then connect new nodes to existing graph
 	c.Wait()
 	fmt.Println(time.Now(), ": Finished crawling.")
+	fmt.Println("Added entries count:", addedEntries)
 	fmt.Println("Starting connecting")
 
 	store.ResolveConnections()

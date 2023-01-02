@@ -32,6 +32,24 @@ func (n4j *Neo4JStore) Init(url string) {
 	n4j.ctx = context.Background()
 }
 
+func (n4j *Neo4JStore) GetNodeCount() (count int64) {
+	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
+	defer session.Close(n4j.ctx)
+	c, err := session.ExecuteRead(n4j.ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(n4j.ctx, "Match (n) Return count(n) as count", nil)
+		if err != nil {
+			return 0, err
+		}
+		record, _ := result.Single(n4j.ctx)
+		c, _ := record.Get("count")
+		return c, nil
+	})
+	if err != nil {
+		return 0
+	}
+	return c.(int64)
+}
+
 func (n4j *Neo4JStore) GetLeafs() (es []string, e error) {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
 	defer session.Close(n4j.ctx)
