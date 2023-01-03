@@ -10,6 +10,7 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/maps"
+	"sync"
 )
 
 type Neo4JStore struct {
@@ -118,43 +119,78 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 
 func (n4j *Neo4JStore) ResolveConnections() error {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
-	defer session.Close(n4j.ctx)
-	entries, err := session.Run(n4j.ctx, "MATCH (n) WHERE NOT (n)-[]->() RETURN n.ChildrenURLs as children, n.Title as title", nil)
+	result, err := session.Run(n4j.ctx, "MATCH (n) WHERE NOT (n)-[]->() RETURN n.ChildrenURLs as children, n.Title as title", nil)
 	if err != nil {
 		return err
 	}
-	tx, err := session.BeginTransaction(n4j.ctx)
+	session.Close(n4j.ctx)
+	// Fingers crossed this isn't too big...
+	entries, err := result.Collect(n4j.ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Close(n4j.ctx)
 
-	for entries.Next(n4j.ctx) {
-		n := entries.Record()
-		childrenData, ok := n.Get("children")
+	var wg sync.WaitGroup
+	queue := make(chan *neo4j.Record, len(entries))
+
+	for _, entry := range entries {
+		queue <- entry
+	}
+	close(queue)
+
+	viper.SetDefault("scraper.connectionworkers", 10)
+	for i := 0; i < viper.GetInt("scraper.connectionworkers"); i++ {
+		wg.Add(1)
+		go n4j.connectionWorker(&wg, queue)
+	}
+
+	wg.Wait()
+	return nil
+}
+
+func (n4j *Neo4JStore) connectionWorker(wg *sync.WaitGroup, queue <-chan *neo4j.Record) {
+	defer wg.Done()
+	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
+	defer session.Close(n4j.ctx)
+	for entry := range queue {
+		parentTitle, ok := entry.Get("title")
 		if !ok {
-			return errors.New("Cannot get ChildrenURLs")
+			fmt.Println("Cannot get Title")
+			continue
+		}
+		childrenData, ok := entry.Get("children")
+		if !ok {
+			fmt.Println("Cannot get ChildrenURLs for entry", parentTitle)
+			continue
 		}
 		var childrenURLs map[string]string
-		err = json.Unmarshal(childrenData.([]byte), &childrenURLs)
+		err := json.Unmarshal(childrenData.([]byte), &childrenURLs)
 		if err != nil {
-			fmt.Println(err)
-			return err
+			fmt.Println("Unmarshal error:", err)
+			continue
 		}
-		parentTitle, ok := n.Get("title")
-		if !ok {
-			return errors.New("Cannot get Title")
-		}
+
 		for choice, child := range childrenURLs {
-			tx.Run(n4j.ctx, "MATCH (parent), (child) WHERE child.Url = $child AND parent.Title = $title CREATE (parent)-[:Choice {text:$choice}]->(child)", map[string]any{
-				"choice": choice,
-				"child":  child,
-				"title":  parentTitle,
+			_, err := session.ExecuteWrite(n4j.ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+				_, err := tx.Run(n4j.ctx, "MATCH (parent), (child) WHERE child.Url = $child AND parent.Title = $title CREATE (parent)-[:Choice {text:$choice}]->(child)", map[string]any{
+					"choice": choice,
+					"child":  child,
+					"title":  parentTitle,
+				})
+				if err != nil {
+					return nil, err
+				}
+				return nil, nil
 			})
+			if err != nil {
+				fmt.Println("Transaction error:", err)
+				fmt.Println("Choice:", choice)
+				fmt.Println("Child:", child)
+				fmt.Println("Title:", parentTitle)
+				continue
+			}
 		}
 	}
-	tx.Commit(n4j.ctx)
-	return nil
 }
 
 func (n4j *Neo4JStore) Shutdown() {
