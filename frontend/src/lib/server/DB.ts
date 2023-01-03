@@ -31,7 +31,7 @@ export async function GetRootId() : Promise<string>{
     // the DB seems to have multiple nodes without incoming edges
     /*const session = GetSession();
     const result = await session.run(
-        'MATCH (entry:Entry) WHERE NOT (entry)<-[]-(:Entry) RETURN entry.Id as Id'
+        'MATCH (entry) WHERE NOT (entry)<-[]-() RETURN entry.Id as Id'
     );
 
     await session.close();
@@ -46,10 +46,9 @@ export async function GetRootId() : Promise<string>{
 
 export async function GetEntry(id: string) : Promise<Entry | null> {
     const session = GetSession();
-    const result = await session.run('MATCH (entry:Entry {Id: $idParam}) RETURN properties(entry) as props, labels(entry) as labels , entry.Id as Id', {
+    const result = await session.run('MATCH (entry {Id: $idParam}) RETURN properties(entry) as props, labels(entry) as labels , entry.Id as Id', {
         idParam: id
     })
-
     const entry = await ParseToEntry(session,result)
 
     await session.close()
@@ -58,7 +57,7 @@ export async function GetEntry(id: string) : Promise<Entry | null> {
 
 export async function FindEntriesWithFilter(filter:string) : Promise<{id: string,title: string, labels: string}[]>{
     const session = GetSession();
-    const result = await session.run('MATCH (entry:Entry) WHERE '+filter+' RETURN entry.Id as Id, entry.Title as Title, labels(entry) as Labels')
+    const result = await session.run('MATCH (entry) WHERE '+filter+' RETURN entry.Id as Id, entry.Title as Title, labels(entry) as Labels')
     await session.close()
     const entries :{id: string,title: string, labels:string}[] = []
     result.records.forEach(record =>{
@@ -83,7 +82,7 @@ async function ParseToEntry(session: neo4j.Session, result: neo4j.QueryResult) :
         entry = e
     })
 
-    result = await session.run('MATCH (entry:Entry {Id: $idParam})-[choice]->(child) RETURN choice.text as ch,child.Id as chId', {
+    result = await session.run('MATCH (entry {Id: $idParam})-[choice]->(child) RETURN choice.text as ch,child.Id as chId', {
         idParam: id
     })
     result.records.forEach(record => {
