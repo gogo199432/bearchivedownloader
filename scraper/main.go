@@ -113,6 +113,7 @@ func createEntry(h *colly.HTMLElement) Entry {
 				strings.Contains(txt, "Add comment") ||
 				strings.Contains(txt, "comments") ||
 				strings.Contains(txt, "Last updated") ||
+				strings.Contains(txt, "Linking Enabled") ||
 				txt == "" {
 				return
 			}
