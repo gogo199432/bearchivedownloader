@@ -33,12 +33,11 @@
     <div style="display: inline">{entry.Date}</div>
     <small style="display: block">Id: {entry.Id}</small>
     <h4>Tags:</h4>
-    {entry.Tags}
-<!--    <ul>-->
-<!--        {#each entry.Tags as tag}-->
-<!--            <li>{tag}</li>-->
-<!--        {/each}-->
-<!--    </ul>-->
+    <ul>
+        {#each entry.Tags as tag}
+            <li>{tag}</li>
+        {/each}
+    </ul>
     <p>{@html entry.Text}</p>
     {#if entry.Choices != null}
         {#if !choiceMade}
