@@ -79,6 +79,7 @@ func (n4j *Neo4JStore) GetLeafs() (es []string, e error) {
 func (n4j *Neo4JStore) Write(entry *Entry) error {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
 	defer session.Close(n4j.ctx)
+
 	tx, err := session.BeginTransaction(n4j.ctx)
 	if err != nil {
 		return err
@@ -96,18 +97,21 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 			tags += ":" + tag
 		}
 	}
-
-	_, err = tx.Run(n4j.ctx, "CREATE (n:Entry { Id: $id,Url: $url, Title: $title, Text: $text, Date: $date, Author: $author}) "+tags+" SET n.ChildrenURLs = $childrenURLs  RETURN n", map[string]interface{}{
-		"url":          entry.Url,
-		"title":        entry.Title,
-		"text":         entry.Text,
-		"date":         entry.Date,
-		"childrenURLs": childrenData,
-		"author":       entry.Author,
-		"id":           shortuuid.New(),
+	props := map[string]interface{}{
+		"Url":          entry.Url,
+		"Title":        entry.Title,
+		"Text":         entry.Text,
+		"Date":         entry.Date,
+		"ChildrenURLs": childrenData,
+		"Author":       entry.Author,
+		"Id":           shortuuid.New(),
+	}
+	_, err = tx.Run(n4j.ctx, "MERGE (n { Url: $Url}) "+tags+" SET n = $props  RETURN n", map[string]interface{}{
+		"props": props,
+		"Url":   entry.Url,
 	})
 	if err != nil {
-		fmt.Println("Error when parsing this page: " + entry.Url)
+		fmt.Println("Error when creating entry for this page: " + entry.Url)
 		return err
 	}
 	err = tx.Commit(n4j.ctx)
@@ -123,7 +127,7 @@ func (n4j *Neo4JStore) ResolveConnections() error {
 	if err != nil {
 		return err
 	}
-	session.Close(n4j.ctx)
+	defer session.Close(n4j.ctx)
 	// Fingers crossed this isn't too big...
 	entries, err := result.Collect(n4j.ctx)
 	if err != nil {

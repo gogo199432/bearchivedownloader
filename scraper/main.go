@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	colly "github.com/gocolly/colly"
+	"github.com/gocolly/colly"
 	. "github.com/gogo199432/bearchivedownloader/stores"
 	. "github.com/gogo199432/bearchivedownloader/types"
 	"github.com/spf13/viper"
@@ -57,9 +57,16 @@ func main() {
 	c.OnHTML("body", func(h *colly.HTMLElement) {
 		entry := createEntry(h)
 		h.ForEach("li", func(i int, h2 *colly.HTMLElement) {
-			if strings.Contains(h2.Text, "*") {
+			if strings.Contains(h2.Text, "*") ||
+				(strings.Contains(h2.Text, ">") && strings.Index(h2.Text, ">") == 0) {
 				attr := h2.ChildAttr("a[href]", "href")
-				entry.ChildrenURLs[h2.Text] = h.Request.AbsoluteURL(attr)
+				choiceText := h2.Text
+				// Since there might be duplicate choice texts (why wouldnt there be...)
+				_, exists := entry.ChildrenURLs[choiceText]
+				if exists {
+					choiceText = choiceText + " - " + strconv.Itoa(i)
+				}
+				entry.ChildrenURLs[choiceText] = h.Request.AbsoluteURL(attr)
 				h.Request.Visit(attr)
 			}
 		})
