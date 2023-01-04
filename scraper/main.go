@@ -7,8 +7,11 @@ import (
 	. "github.com/gogo199432/bearchivedownloader/types"
 	"github.com/spf13/viper"
 	"log"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -28,17 +31,43 @@ func main() {
 	default:
 		store = new(Neo4JStore)
 	}
-	store.Init(viper.GetString("database.connectionString"))
+	done := make(chan bool, 1)
+	store.Init(viper.GetString("database.connectionString"), done)
 	defer store.Shutdown()
+
+	// Make sure we can handle docker stop and kill commands gracefully
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGKILL)
+	go func() {
+		sig := <-signalChan
+		log.Printf("Captured SIG: %v. Shutting down...", sig)
+		store.Shutdown()
+		done <- true
+	}()
+	var depth = 0
+	if viper.InConfig("scraper.depth") {
+		depth = viper.GetInt("scraper.depth")
+	}
+	if depth > 0 {
+		fmt.Println("Depth is", strconv.Itoa(depth))
+		crawl(store, depth)
+		fmt.Println(time.Now(), ": Finished crawling. Starting connecting now...")
+	} else {
+		fmt.Println(time.Now(), ": Skipped crawling because depth was 0 or less. Starting connecting now...")
+	}
+
+	store.ResolveConnections()
+	// Wait for done notification
+	<-done
+	fmt.Println(time.Now(), ": Finished :)")
+}
+
+func crawl(store Storage, depth int) {
 	c := colly.NewCollector(func(c *colly.Collector) {
 		c.Async = true
 		c.DetectCharset = true
-	})
-	if viper.InConfig("scraper.depth") {
-		depth := viper.GetInt("scraper.depth")
-		fmt.Println("Depth is", strconv.Itoa(depth))
 		c.MaxDepth = depth
-	}
+	})
 
 	// Limit the maximum parallelism
 	// This is necessary if the goroutines are dynamically
@@ -92,13 +121,7 @@ func main() {
 
 	// Make sure we have finished crawling on all threads, and then connect new nodes to existing graph
 	c.Wait()
-	fmt.Println(time.Now(), ": Finished crawling.")
 	fmt.Println("Added entries count:", addedEntries)
-	fmt.Println("Starting connecting")
-
-	store.ResolveConnections()
-
-	fmt.Println(time.Now(), ": Finished :)")
 }
 
 func createEntry(h *colly.HTMLElement) Entry {

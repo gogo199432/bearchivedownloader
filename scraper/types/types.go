@@ -14,7 +14,7 @@ type Entry struct {
 }
 
 type Storage interface {
-	Init(url string)
+	Init(url string, doneCh chan bool)
 	Write(entry *Entry) error
 	ResolveConnections() error
 	GetLeafs() (es []string, e error)

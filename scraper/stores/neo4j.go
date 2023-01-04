@@ -11,31 +11,45 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/exp/maps"
 	"sync"
+	"time"
 )
 
 type Neo4JStore struct {
 	driver neo4j.DriverWithContext
 	ctx    context.Context
+	doneCh chan bool
 }
 
-func (n4j *Neo4JStore) Init(url string) {
+func (n4j *Neo4JStore) Init(url string, doneCh chan bool) {
 	dbUri := url
 	neo4jauth := neo4j.NoAuth()
 	if viper.InConfig("database.password") {
 		viper.SetDefault("database.username", "neo4j")
 		neo4jauth = neo4j.BasicAuth(viper.GetString("database.username"), viper.GetString("database.password"), "")
 	}
-	driver, err := neo4j.NewDriverWithContext(dbUri, neo4jauth)
+	driver, err := neo4j.NewDriverWithContext(dbUri, neo4jauth, func(config *neo4j.Config) {
+		config.ConnectionAcquisitionTimeout = 10 * time.Minute
+		config.SocketConnectTimeout = 1 * time.Minute
+	})
 	if err != nil {
 		panic(err)
 	}
 	n4j.driver = driver
 	n4j.ctx = context.Background()
+	n4j.doneCh = doneCh
+}
+
+func (n4j *Neo4JStore) CloseSession(session neo4j.SessionWithContext) {
+	err := session.Close(n4j.ctx)
+	if err != nil {
+		fmt.Println("Unable to close session properly")
+		return
+	}
 }
 
 func (n4j *Neo4JStore) GetNodeCount() (count int64) {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
-	defer session.Close(n4j.ctx)
+	defer n4j.CloseSession(session)
 	c, err := session.ExecuteRead(n4j.ctx, func(tx neo4j.ManagedTransaction) (any, error) {
 		result, err := tx.Run(n4j.ctx, "Match (n) Return count(n) as count", nil)
 		if err != nil {
@@ -53,7 +67,7 @@ func (n4j *Neo4JStore) GetNodeCount() (count int64) {
 
 func (n4j *Neo4JStore) GetLeafs() (es []string, e error) {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
-	defer session.Close(n4j.ctx)
+	defer n4j.CloseSession(session)
 	entriesUnparsed, err := session.Run(n4j.ctx, "MATCH (n) WHERE NOT (n)-->() RETURN n.ChildrenURLs as children", nil)
 	if err != nil {
 		return nil, err
@@ -63,7 +77,7 @@ func (n4j *Neo4JStore) GetLeafs() (es []string, e error) {
 		n := entriesUnparsed.Record()
 		childrenData, ok := n.Get("children")
 		if !ok {
-			return nil, errors.New("Cannot get ChildrenURLs")
+			return nil, errors.New("cannot get ChildrenURLs")
 		}
 		var localChildrenURLs map[string]string
 		err = json.Unmarshal(childrenData.([]byte), &localChildrenURLs)
@@ -78,13 +92,7 @@ func (n4j *Neo4JStore) GetLeafs() (es []string, e error) {
 
 func (n4j *Neo4JStore) Write(entry *Entry) error {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
-	defer session.Close(n4j.ctx)
-
-	tx, err := session.BeginTransaction(n4j.ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Close(n4j.ctx)
+	defer n4j.CloseSession(session)
 	childrenData, err := json.Marshal(entry.ChildrenURLs)
 	if err != nil {
 		return err
@@ -106,16 +114,14 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 		"Author":       entry.Author,
 		"Id":           shortuuid.New(),
 	}
-	_, err = tx.Run(n4j.ctx, "MERGE (n { Url: $Url}) "+tags+" SET n = $props  RETURN n", map[string]interface{}{
-		"props": props,
-		"Url":   entry.Url,
-	})
+	_, err = session.ExecuteWrite(n4j.ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		return tx.Run(n4j.ctx, "MERGE (n { Url: $Url}) ON CREATE "+tags+" SET n = $props  RETURN n", map[string]interface{}{
+			"props": props,
+			"Url":   entry.Url,
+		})
+	}, neo4j.WithTxTimeout(30*time.Second))
 	if err != nil {
 		fmt.Println("Error when creating entry for this page: " + entry.Url)
-		return err
-	}
-	err = tx.Commit(n4j.ctx)
-	if err != nil {
 		return err
 	}
 	return nil
@@ -123,11 +129,11 @@ func (n4j *Neo4JStore) Write(entry *Entry) error {
 
 func (n4j *Neo4JStore) ResolveConnections() error {
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
-	result, err := session.Run(n4j.ctx, "MATCH (n) WHERE NOT (n)-[]->() RETURN n.ChildrenURLs as children, n.Title as title", nil)
+	result, err := session.Run(n4j.ctx, "MATCH (n) WHERE NOT (n)-[]->() RETURN n.ChildrenURLs as children, n.Url as url", nil)
 	if err != nil {
 		return err
 	}
-	defer session.Close(n4j.ctx)
+	defer n4j.CloseSession(session)
 	// Fingers crossed this isn't too big...
 	entries, err := result.Collect(n4j.ctx)
 	if err != nil {
@@ -149,22 +155,23 @@ func (n4j *Neo4JStore) ResolveConnections() error {
 	}
 
 	wg.Wait()
+	n4j.doneCh <- true
 	return nil
 }
 
 func (n4j *Neo4JStore) connectionWorker(wg *sync.WaitGroup, queue <-chan *neo4j.Record) {
 	defer wg.Done()
 	session := n4j.driver.NewSession(n4j.ctx, neo4j.SessionConfig{})
-	defer session.Close(n4j.ctx)
+	defer n4j.CloseSession(session)
 	for entry := range queue {
-		parentTitle, ok := entry.Get("title")
+		parentUrl, ok := entry.Get("url")
 		if !ok {
-			fmt.Println("Cannot get Title")
+			fmt.Println("Cannot get Url of parent")
 			continue
 		}
 		childrenData, ok := entry.Get("children")
 		if !ok {
-			fmt.Println("Cannot get ChildrenURLs for entry", parentTitle)
+			fmt.Println("Cannot get ChildrenURLs for entry", parentUrl)
 			continue
 		}
 		var childrenURLs map[string]string
@@ -176,10 +183,10 @@ func (n4j *Neo4JStore) connectionWorker(wg *sync.WaitGroup, queue <-chan *neo4j.
 
 		for choice, child := range childrenURLs {
 			_, err := session.ExecuteWrite(n4j.ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-				_, err := tx.Run(n4j.ctx, "MATCH (parent), (child) WHERE child.Url = $child AND parent.Title = $title CREATE (parent)-[:Choice {text:$choice}]->(child)", map[string]any{
+				_, err := tx.Run(n4j.ctx, "MATCH (parent), (child) WHERE child.Url = $child AND parent.Url = $url CREATE (parent)-[:Choice {text:$choice}]->(child)", map[string]any{
 					"choice": choice,
 					"child":  child,
-					"title":  parentTitle,
+					"url":    parentUrl,
 				})
 				if err != nil {
 					return nil, err
@@ -190,7 +197,7 @@ func (n4j *Neo4JStore) connectionWorker(wg *sync.WaitGroup, queue <-chan *neo4j.
 				fmt.Println("Transaction error:", err)
 				fmt.Println("Choice:", choice)
 				fmt.Println("Child:", child)
-				fmt.Println("Title:", parentTitle)
+				fmt.Println("Url:", parentUrl)
 				continue
 			}
 		}
@@ -198,5 +205,10 @@ func (n4j *Neo4JStore) connectionWorker(wg *sync.WaitGroup, queue <-chan *neo4j.
 }
 
 func (n4j *Neo4JStore) Shutdown() {
-	n4j.driver.Close(n4j.ctx)
+	err := n4j.driver.Close(n4j.ctx)
+	if err != nil {
+		fmt.Println("ERROR WHILE SHUTTING DOWN DB DRIVER!")
+		fmt.Println(err)
+		return
+	}
 }
