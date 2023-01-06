@@ -7,7 +7,6 @@
 
     let entries : string[] = []
     onMount(function(){
-        console.log($page.params["rootEntry"])
         entries = [$page.params["rootEntry"],...entries]
     })
 
@@ -16,7 +15,7 @@
     }
 
     function backHandler(event){
-        entries.length = entries.indexOf(event.detail.choice)
+        entries.length = entries.lastIndexOf(event.detail.choice)
     }
 </script>
 
